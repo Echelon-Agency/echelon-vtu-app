@@ -1,0 +1,397 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COSMOS - Project Exodus</title>
+  
+  <!-- Orbitron & Rajdhani fonts for high-tech sci-fi look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Rajdhani', 'sans-serif'],
+            display: ['Orbitron', 'sans-serif'],
+            mono: ['Space Mono', 'monospace'],
+          },
+          colors: {
+            cosmic: {
+              black: '#030712',
+              blue: '#0d1527',
+              accent: '#38bdf8',
+              purple: '#8b5cf6',
+              neon: '#06b6d4',
+              amber: '#f59e0b',
+            }
+          },
+          animation: {
+            'spin-slow': 'spin 20s linear infinite',
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'ping-slow': 'ping 3s cubic-bezier(0, 0, 0.2, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar to keep layout clean */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(3, 7, 18, 0.95);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #06b6d4;
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
+    }
+
+    /* Selection Colors */
+    ::selection {
+      background: rgba(6, 182, 212, 0.3);
+      color: #ffffff;
+    }
+
+    /* Scanline overlay for retro CRT/Terminal feel */
+    .scanlines {
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      );
+      background-size: 100% 4px;
+      z-index: 40;
+    }
+
+    /* Ambient glow effects */
+    .glow-cyan {
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+    }
+    .text-glow {
+      text-shadow: 0 0 8px rgba(6, 182, 212, 0.5);
+    }
+    .border-glow {
+      border-color: rgba(6, 182, 212, 0.4);
+    }
+
+    /* Hide standard cursor inside interactive zones to show cosmic crosshair */
+    .custom-cursor-area {
+      cursor: none;
+    }
+
+    /* Glassmorphism custom styling */
+    .glass-panel {
+      background: rgba(13, 21, 39, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+
+  <!-- Libraries: Three.js, GSAP + ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+</head>
+
+<body class="bg-cosmic-black text-white font-sans overflow-x-hidden antialiased selection:bg-cosmic-neon/30">
+
+  <!-- Reticle Crosshair tracker -->
+  <div id="crosshair" class="fixed top-0 left-0 w-8 h-8 border border-cosmic-neon/40 rounded-full pointer-events-none z-50 mix-blend-difference transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center opacity-0 transition-opacity duration-300">
+    <div class="w-1 h-1 bg-cosmic-neon rounded-full"></div>
+    <div class="absolute w-12 h-[1px] bg-cosmic-neon/20"></div>
+    <div class="absolute h-12 w-[1px] bg-cosmic-neon/20"></div>
+  </div>
+
+  <!-- Ambient CRT/Terminal Scanlines -->
+  <div class="scanlines fixed inset-0 pointer-events-none"></div>
+
+  <!-- Loading Screen overlay -->
+  <div id="loading-screen" class="fixed inset-0 z-50 bg-cosmic-black flex flex-col items-center justify-center transition-all duration-1000">
+    <div class="relative flex flex-col items-center">
+      <!-- Animated Sci-fi Ring -->
+      <div class="w-32 h-32 rounded-full border-4 border-t-cosmic-neon border-r-transparent border-b-cosmic-purple border-l-transparent animate-spin-slow flex items-center justify-center mb-8">
+        <div class="w-24 h-24 rounded-full border border-dashed border-cosmic-neon/40 animate-pulse-slow"></div>
+      </div>
+      <h1 class="font-display text-4xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cosmic-neon via-cosmic-accent to-cosmic-purple text-glow">
+        COSMOS
+      </h1>
+      <p class="font-mono text-xs tracking-[0.3em] mt-2 text-cosmic-neon/80 uppercase">Project Exodus Interface</p>
+      
+      <!-- Load progress bar -->
+      <div class="w-64 h-1 bg-slate-950 rounded-full mt-8 overflow-hidden border border-white/5">
+        <div id="load-progress" class="h-full bg-gradient-to-r from-cosmic-neon to-cosmic-purple transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <p id="load-status" class="font-mono text-[10px] mt-2 text-slate-400">CONNECTING TO QUANTUM RELAY...</p>
+    </div>
+  </div>
+
+  <!-- Persistent Telemetry Header (HUD) -->
+  <header class="fixed top-0 left-0 w-full z-40 p-4 md:p-6 flex items-center justify-between pointer-events-none">
+    <div class="pointer-events-auto flex items-center space-x-4">
+      <div class="h-10 w-10 flex items-center justify-center rounded border border-cosmic-neon/30 bg-cosmic-blue/60 backdrop-blur-md">
+        <span class="font-display font-black text-xl text-cosmic-neon text-glow">Ω</span>
+      </div>
+      <div>
+        <h2 class="font-display font-bold text-lg tracking-wider text-glow">EXODUS-IV</h2>
+        <p class="font-mono text-[10px] text-cosmic-neon/60 tracking-widest">DEEP SPACE TELEMETRY LINK ACTIVE</p>
+      </div>
+    </div>
+
+    <!-- Quick controls / Sound engine state / Metrics -->
+    <div class="pointer-events-auto flex items-center space-x-3 md:space-x-6">
+      <div class="hidden lg:flex flex-col items-end font-mono text-[10px] text-slate-400">
+        <div>ORBITAL DRIFT: <span id="telemetry-drift" class="text-cosmic-neon">0.032°/s</span></div>
+        <div>QUANTUM COHERENCE: <span id="telemetry-coherence" class="text-cosmic-neon">99.82%</span></div>
+      </div>
+      
+      <!-- Audio Synth Control Toggle -->
+      <button id="synth-toggle" class="flex items-center space-x-2 px-3 py-1.5 rounded border border-white/10 bg-slate-900/50 hover:bg-cosmic-neon/20 hover:border-cosmic-neon/50 transition-all duration-300 text-xs font-mono group">
+        <div class="w-2 h-2 rounded-full bg-red-500 group-hover:animate-ping" id="audio-indicator"></div>
+        <span id="audio-text">INIT SOUND ENGINE</span>
+      </button>
+
+      <button id="dashboard-toggle" class="px-3 py-1.5 rounded border border-white/10 bg-slate-900/50 hover:bg-cosmic-neon/20 text-xs font-mono transition-all duration-300">
+        DASHBOARD
+      </button>
+    </div>
+  </header>
+
+  <!-- Side Control Dashboard Overlay (Collapsible) -->
+  <aside id="system-dashboard" class="fixed right-0 top-0 h-full w-80 z-30 glass-panel translate-x-full transition-transform duration-500 ease-out p-6 pt-24 flex flex-col justify-between border-l border-white/10 pointer-events-auto">
+    <div class="space-y-6">
+      <div class="border-b border-white/10 pb-4">
+        <h3 class="font-display text-lg font-bold text-cosmic-neon tracking-wide">SYSTEM DIAGNOSTICS</h3>
+        <p class="font-mono text-[10px] text-slate-400">ENGINEERING CORE v3.5</p>
+      </div>
+
+      <!-- Live render configuration -->
+      <div class="space-y-4">
+        <h4 class="font-mono text-xs uppercase tracking-wider text-cosmic-accent">Render Controls</h4>
+        <div class="space-y-3">
+          <div>
+            <label class="flex justify-between text-xs text-slate-300 mb-1 font-mono">
+              <span>STARLIGHT COLOR</span>
+              <span id="starlight-val" class="text-cosmic-neon">CYAN</span>
+            </label>
+            <input id="starlight-slider" type="range" min="1" max="3" value="1" class="w-full accent-cosmic-neon bg-slate-950">
+          </div>
+
+          <div>
+            <label class="flex justify-between text-xs text-slate-300 mb-1 font-mono">
+              <span>ROTATION VELOCITY</span>
+              <span id="speed-val" class="text-cosmic-neon">1x</span>
+            </label>
+            <input id="speed-slider" type="range" min="1" max="5" value="1" class="w-full accent-cosmic-neon bg-slate-950">
+          </div>
+
+          <div class="flex items-center justify-between py-2 border-t border-b border-white/5">
+            <span class="text-xs text-slate-300 font-mono">DIAGNOSTIC WIREFRAME</span>
+            <button id="wireframe-btn" class="w-10 h-5 bg-slate-950 rounded-full border border-white/10 relative p-0.5 transition-all duration-300">
+              <div class="w-3.5 h-3.5 bg-slate-500 rounded-full transition-transform duration-300" id="wireframe-knob"></div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-time dynamic graph updates via JS -->
+      <div class="space-y-3">
+        <h4 class="font-mono text-xs uppercase tracking-wider text-cosmic-accent">Anomaly Vector Map</h4>
+        <div class="h-24 bg-slate-950/60 border border-white/5 rounded p-2 flex flex-col justify-between font-mono text-[10px]">
+          <div class="flex justify-between text-slate-500">
+            <span>GRID RANGE</span>
+            <span>[ 4.2 AU ]</span>
+          </div>
+          <!-- Canvas mini-visualizer -->
+          <canvas id="mini-graph" class="w-full h-12 bg-transparent opacity-85"></canvas>
+          <div class="flex justify-between text-slate-400">
+            <span>RADAR PULSE STATUS:</span>
+            <span class="text-emerald-400 animate-pulse">OPTIMAL</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="p-3 bg-cosmic-neon/5 rounded border border-cosmic-neon/15">
+        <div class="flex items-center space-x-2 text-cosmic-neon mb-1">
+          <span class="w-2 h-2 rounded-full bg-cosmic-neon animate-pulse"></span>
+          <span class="font-display font-semibold text-xs tracking-wider">SECURE DATA PROTOCOL</span>
+        </div>
+        <p class="text-[10px] text-slate-300 font-mono leading-relaxed">Exodus project relies on procedural gravity anchor coordinates. Synchronizing with node-09-2025.</p>
+      </div>
+      <p class="font-mono text-[9px] text-slate-500 text-center">COSMOS HUB • RE-EDIT 2026</p>
+    </div>
+  </aside>
+
+  <!-- Interactive Coordinate Hotspots (3D Projectors on HTML) -->
+  <div id="hotspots-container" class="absolute inset-0 pointer-events-none z-20">
+    <!-- Dynamic projections inserted here via JavaScript -->
+  </div>
+
+  <!-- Sound/Alert notification toast -->
+  <div id="alarm-toast" class="fixed bottom-6 left-6 z-40 glass-panel p-4 rounded-lg flex items-center space-x-3 transform translate-y-24 opacity-0 transition-all duration-500 border border-red-500/30">
+    <div class="w-10 h-10 rounded-full bg-red-950/40 border border-red-500/50 flex items-center justify-center animate-pulse">
+      <span class="text-red-500 font-bold font-mono text-lg">!</span>
+    </div>
+    <div>
+      <h4 class="font-display font-extrabold text-sm text-red-500 tracking-wider">WARN: COSMIC DISTURBANCE</h4>
+      <p class="font-mono text-xs text-slate-300">ASTEROID FIELD THRESHOLD BREACHED</p>
+    </div>
+  </div>
+
+  <!-- Background Three.js canvas container -->
+  <div id="canvas-container" class="fixed inset-0 w-full h-full -z-10 bg-cosmic-black"></div>
+
+  <!-- Primary Scroll-bound content container -->
+  <main id="scroll-container" class="relative z-10 w-full pointer-events-none">
+    
+    <!-- Hero / Section 0: Home -->
+    <section id="sec-hero" class="relative min-h-screen w-full flex flex-col justify-between p-6 md:p-12 lg:p-20">
+      <div></div> <!-- Spacer -->
+      
+      <div class="max-w-4xl py-12 pointer-events-auto">
+        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded bg-cosmic-neon/10 border border-cosmic-neon/30 mb-4 animate-pulse">
+          <span class="w-2 h-2 rounded-full bg-cosmic-neon"></span>
+          <span class="font-mono text-xs text-cosmic-neon tracking-widest uppercase">System Initialization Successful</span>
+        </div>
+        
+        <h1 class="font-display font-black text-5xl md:text-7xl lg:text-8xl tracking-tight leading-none mb-4 uppercase">
+          PROJECT<br>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-cosmic-neon via-cosmic-accent to-cosmic-purple text-glow">EXODUS</span>
+        </h1>
+        
+        <p class="text-lg md:text-xl text-slate-300 max-w-xl font-medium tracking-wide mb-8 leading-relaxed">
+          Embark on an immersive journey across the galactic vector of <strong class="text-cosmic-neon">Aegis-IV</strong>. Control custom physics engines, explore system structures, and map cosmic gravity grids.
+        </p>
+
+        <!-- Interactive CTA buttons -->
+        <div class="flex flex-wrap gap-4">
+          <button id="btn-begin" class="px-6 py-3 rounded bg-cosmic-neon hover:bg-cosmic-accent text-cosmic-black font-display font-black tracking-widest text-sm transition-all duration-300 border-glow glow-cyan hover:-translate-y-0.5">
+            INITIATE SYSTEM LINK
+          </button>
+          <button id="btn-spec" class="px-6 py-3 rounded border border-white/15 bg-white/5 hover:bg-white/10 hover:border-cosmic-purple/50 text-white font-display font-semibold tracking-widest text-sm transition-all duration-300 hover:-translate-y-0.5">
+            CORE PROTOCOL SPECS
+          </button>
+        </div>
+      </div>
+
+      <!-- Scroll Indicator -->
+      <div class="flex items-center justify-between text-slate-400 font-mono text-[11px] tracking-widest">
+        <span>COORDINATES: SEC-001</span>
+        <div class="flex items-center space-x-2 animate-bounce">
+          <span>SCROLL TO DESCEND</span>
+          <span class="text-cosmic-neon font-bold">↓</span>
+        </div>
+        <span>SECTOR SPEED: 1.0 Mach</span>
+      </div>
+    </section>
+
+    <!-- Section 1: Planet Aegis-IV Exploration -->
+    <section class="min-h-screen w-full flex items-center justify-start p-6 md:p-12 lg:p-20 relative">
+      <div class="max-w-md pointer-events-auto glass-panel p-6 md:p-8 rounded-xl border border-white/10 relative overflow-hidden group">
+        <!-- Accent light lines -->
+        <div class="absolute top-0 left-0 w-2 h-full bg-cosmic-neon"></div>
+        
+        <span class="font-mono text-[11px] text-cosmic-neon tracking-widest uppercase mb-1 block">Exoplanet Diagnostic</span>
+        <h2 class="font-display font-extrabold text-3xl md:text-4xl tracking-wide mb-3 text-white uppercase">AEGIS-IV</h2>
+        
+        <p class="text-slate-300 text-sm md:text-base font-normal leading-relaxed mb-6 font-mono">
+          A neon-active deep biosphere rich in hyper-dense core alloys. Active gravitational anomalies have been detected at the northern cluster networks.
+        </p>
+
+        <!-- Telemetry bar graphs (scrolled values) -->
+        <div class="space-y-4 mb-6">
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-slate-400">
+              <span class="font-mono">ATMOSPHERIC PRESSURE</span>
+              <span class="text-cosmic-neon font-bold font-mono">1.24 atm</span>
+            </div>
+            <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-cosmic-neon to-cosmic-accent w-[85%] transition-all duration-1000"></div>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-slate-400">
+              <span class="font-mono">MAG-SHIELD DENSITY</span>
+              <span class="text-cosmic-purple font-bold font-mono">92.4 T</span>
+            </div>
+            <div class="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-cosmic-purple to-pink-500 w-[92%] transition-all duration-1000"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-white/5 rounded border border-white/5 text-[11px] font-mono text-slate-400">
+          * Dynamic hotspots are projected onto your viewport. <strong class="text-cosmic-neon">Click any orbit marker</strong> to automatically align orbital camera arrays.
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Asteroid Canyon Navigation -->
+    <section class="min-h-screen w-full flex items-center justify-end p-6 md:p-12 lg:p-20 relative">
+      <div class="max-w-md pointer-events-auto glass-panel p-6 md:p-8 rounded-xl border border-white/10 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
+        
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-mono text-[11px] text-red-400 tracking-widest uppercase">ASTEROID CORRIDOR</span>
+          <span class="animate-pulse px-1.5 py-0.5 rounded bg-red-950/50 border border-red-500/40 font-mono text-[9px] text-red-500">ALERT THREAT LEVEL</span>
+        </div>
+        
+        <h2 class="font-display font-extrabold text-3xl tracking-wide mb-3 text-white uppercase">SHIELD DEFLECTOR</h2>
+        
+        <p class="text-slate-300 text-sm font-mono leading-relaxed mb-6">
+          System is crossing the dense crystalline asteroid ring. High-speed kinetic impacts require electromagnetic pulse shield routing.
+        </p>
+
+        <!-- Interactive shield activator -->
+        <div class="space-y-4">
+          <button id="btn-pulse" class="w-full py-3 rounded bg-red-500 hover:bg-red-600 text-white font-display font-black tracking-widest text-xs transition-all duration-300 border border-red-400/30 flex items-center justify-center space-x-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
+            <span>ACTIVATE PULSE SHIELD</span>
+          </button>
+          
+          <div class="grid grid-cols-2 gap-2 text-[10px] font-mono">
+            <div class="p-2 bg-slate-950/60 rounded border border-white/5">
+              <span class="text-slate-500">SHIELD DURATION:</span>
+              <div class="text-slate-300 font-bold" id="pulse-duration-val">3.50 SEC</div>
+            </div>
+            <div class="p-2 bg-slate-950/60 rounded border border-white/5">
+              <span class="text-slate-500">PULSE CHARGE:</span>
+              <div class="text-emerald-400 font-bold animate-pulse">READY</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Modular Space Station -->
+    <section class="min-h-screen w-full flex items-center justify-start p-6 md:p-12 lg:p-20 relative">
+      <div class="max-w-md pointer-events-auto glass-panel p-6 md:p-8 rounded-xl border border-white/10 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-2 h-full bg-cosmic-purple"></div>
+        
+        <span class="font-mono text-[11px] text-cosmic-purple tracking-widest uppercase mb-1 block">MODULAR STRUCTURAL CORE</span>
+        <h2 class="font-display font-extrabold text-3xl tracking-wide mb-3 text-white uppercase">DOCKING HUB-09</h2>
+        
+        <p class="text-slate-300 text-sm leading-relaxed mb-6 font-mono">
+          An orbital modular station acting as a gravity node anchor. Coordinates all deep space mining shuttles.
+        </p>
+
+        <div class="space-y-3">
+          <button id="btn-station" class="w-full py-2.5 rounded border border-cosmic-purple/40 bg-cosmic-purple/10 hover:bg-cosmic-purple/20 text-cosmic-purple text-xs font-display font-black tracking-wider transition-all duration-300">
+            RE-ORIENT STATION SOLAR ARRAYS
+          </button>
+          
+          <div class="p-3 bg-slate-950/60 rounded border border-whit
